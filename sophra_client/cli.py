@@ -880,7 +880,26 @@ def vitals_debug(*, agent_id: str) -> dict[str, Any]:
 
 def public_stats() -> dict[str, Any]:
     config = load_config()
-    payload = request_admin_api("GET", "/api/stats", config)
+    base_url = str(config.get("baseUrl") or config.get("adminBaseUrl") or DEFAULT_BASE_URL).rstrip("/")
+    try:
+        req = request.Request(
+            f"{base_url}/api/stats",
+            headers={"Accept": "application/json"},
+            method="GET",
+        )
+        with request.urlopen(req, timeout=20) as response:
+            response_text = response.read().decode("utf-8")
+            payload = json.loads(response_text) if response_text.strip() else {}
+            if not isinstance(payload, dict):
+                payload = {"ok": False, "error": "Payload Sophra invalide."}
+    except error.HTTPError as exc:
+        try:
+            detail = json.loads(exc.read().decode("utf-8"))
+        except Exception:
+            detail = str(exc)
+        payload = {"ok": False, "error": f"HTTP {exc.code}", "detail": detail}
+    except Exception as exc:
+        payload = {"ok": False, "error": str(exc)}
     log_state("public_stats", bool(payload.get("success") or payload.get("ok")), payload)
     return payload
 
